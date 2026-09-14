@@ -1,0 +1,10 @@
+# GENERATED browser bundle. Built by `npm run build` from core.js +
+# live-terminal.js. Kept in the package so an installed checkout works without
+# a build step; regenerate it whenever either source changes.
+# (Committed on purpose — the DSH loader reads this exact file at boot.)
+client.js.map
+
+node_modules/
+*.log
+.DS_Store
+Thumbs.db

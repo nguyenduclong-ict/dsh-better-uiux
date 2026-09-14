@@ -1,0 +1,58 @@
+{
+  "name": "dsh-better-uiux",
+  "version": "0.1.0",
+  "description": "Better UIUX for DeepSeek Harness — one Settings section with switches for a live terminal output stream and live custom CSS injection",
+  "type": "module",
+  "main": "./index.js",
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "node build.mjs && node syntax-check.mjs . && node tests/stylesheet-integrity-test.mjs && node tests/render-section.mjs && node tests/client-wiring-test.mjs && node tests/edit-placement-test.mjs && node tests/edit-fork-test.mjs && node tests/card-job-resolve-test.mjs && node tests/startup-activation-test.mjs && node tests/composer-fill-test.mjs && node tests/host-smoke-test.mjs && node tests/config-edge-test.mjs",
+    "test": "node tests/stylesheet-integrity-test.mjs && node tests/render-section.mjs && node tests/client-wiring-test.mjs && node tests/edit-placement-test.mjs && node tests/edit-fork-test.mjs && node tests/card-job-resolve-test.mjs && node tests/startup-activation-test.mjs && node tests/composer-fill-test.mjs && node tests/host-smoke-test.mjs && node tests/config-edge-test.mjs",
+    "install:local": "node local-install.mjs install",
+    "uninstall:local": "node local-install.mjs uninstall",
+    "status:local": "node local-install.mjs status"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nguyenduclong-ict/dsh-better-uiux.git"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "dsh-plugin",
+    "better-uiux",
+    "terminal",
+    "live-terminal",
+    "css",
+    "custom-css",
+    "edit-message",
+    "settings",
+    "ui"
+  ],
+  "author": "nguyenduclong-ict",
+  "license": "MIT",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ],
+      "immediately": true,
+      "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-client-locale": "^0.1.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-settings": "^0.1.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-slots": "^0.1.2-rc.1"
+  }
+}
