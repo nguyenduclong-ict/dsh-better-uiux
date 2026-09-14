@@ -14,6 +14,16 @@ skipped, and turning the live terminal off **removes** every node it injected. T
 matters because DSH is expected to show live output natively one day — when it does,
 switch this feature off instead of uninstalling anything.
 
+## Screenshots
+
+<p align="center">
+  <img src="assets/output-modal.png" alt="Live terminal output: the output modal showing a background job's streamed output, with View block, Copy and Stop job actions" width="820" />
+</p>
+
+<p align="center">
+  <img src="assets/job-card-buttons.png" alt="A job_output tool card with the injected Output and Stop buttons sitting next to the native Inspect button" width="620" />
+</p>
+
 ## Settings
 
 **Settings → Better UIUX** holds the two switches, a one-line explanation for each,
