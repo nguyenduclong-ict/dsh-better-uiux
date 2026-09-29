@@ -1,13 +1,13 @@
 {
   "name": "dsh-better-uiux",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Better UIUX for DeepSeek Harness — one Settings section with switches for a live terminal output stream and live custom CSS injection",
   "type": "module",
   "main": "./index.js",
   "scripts": {
     "build": "node build.mjs",
-    "check": "node build.mjs && node syntax-check.mjs . && node tests/stylesheet-integrity-test.mjs && node tests/render-section.mjs && node tests/client-wiring-test.mjs && node tests/edit-placement-test.mjs && node tests/edit-fork-test.mjs && node tests/card-job-resolve-test.mjs && node tests/startup-activation-test.mjs && node tests/composer-fill-test.mjs && node tests/host-smoke-test.mjs && node tests/config-edge-test.mjs",
-    "test": "node tests/stylesheet-integrity-test.mjs && node tests/render-section.mjs && node tests/client-wiring-test.mjs && node tests/edit-placement-test.mjs && node tests/edit-fork-test.mjs && node tests/card-job-resolve-test.mjs && node tests/startup-activation-test.mjs && node tests/composer-fill-test.mjs && node tests/host-smoke-test.mjs && node tests/config-edge-test.mjs",
+    "check": "node build.mjs && node syntax-check.mjs . && node tests/stylesheet-integrity-test.mjs && node tests/render-section.mjs && node tests/output-modal-test.mjs && node tests/client-wiring-test.mjs && node tests/edit-placement-test.mjs && node tests/edit-fork-test.mjs && node tests/card-job-resolve-test.mjs && node tests/startup-activation-test.mjs && node tests/composer-fill-test.mjs && node tests/host-smoke-test.mjs && node tests/config-edge-test.mjs",
+    "test": "node tests/stylesheet-integrity-test.mjs && node tests/render-section.mjs && node tests/output-modal-test.mjs && node tests/client-wiring-test.mjs && node tests/edit-placement-test.mjs && node tests/edit-fork-test.mjs && node tests/card-job-resolve-test.mjs && node tests/startup-activation-test.mjs && node tests/composer-fill-test.mjs && node tests/host-smoke-test.mjs && node tests/config-edge-test.mjs",
     "install:local": "node local-install.mjs install",
     "uninstall:local": "node local-install.mjs uninstall",
     "status:local": "node local-install.mjs status"

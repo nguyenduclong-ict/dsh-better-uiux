@@ -5,7 +5,7 @@ Two UI enhancements for **DeepSeek Harness (DSH Desktop)**, together in one
 
 | Switch | What it does | Default |
 | --- | --- | --- |
-| **Live terminal output** | Streams foreground command output and background-job output into the transcript: live blocks with a pulsing header dot, **Copy** / **Stop** / **View Job**, an output modal, and clickable job rows. | on |
+| **Live terminal output** | Streams foreground command output and background-job output into the transcript: live blocks with a pulsing header dot, **Copy** / **Stop** / **View Job**, and an output modal. | on |
 | **Custom CSS** | Injects your own CSS into the Web GUI, applied live as you type. | on |
 
 Both ship on, so a fresh install is immediately useful. A switched-off feature really
@@ -17,7 +17,7 @@ switch this feature off instead of uninstalling anything.
 ## Screenshots
 
 <p align="center">
-  <img src="assets/output-modal.png" alt="Live terminal output: the output modal showing a background job's streamed output, with View block, Copy and Stop job actions" width="820" />
+  <img src="assets/output-modal.png" alt="Live terminal output: the output modal showing a background job's streamed output, with Copy and Stop job actions" width="820" />
 </p>
 
 <p align="center">
@@ -108,7 +108,7 @@ core.js             browser half: config store, Settings section, custom CSS, (h
 live-terminal.js    browser half: live terminal, gated on the switch + full teardown
 client.js           GENERATED: core.js + live-terminal.js, merged by build.mjs
 build.mjs           the merge step (the shell loads exactly one bundle per package)
-tests/              render, wiring, host smoke, config edges, placement/fork, activation
+tests/              render (settings pane + output modal), wiring, host smoke, config edges, placement/fork, activation
 ```
 
 ```pwsh

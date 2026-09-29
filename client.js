@@ -45,7 +45,7 @@ window.__ModuleLoader__.load({
     /** Locale dictionary namespace owned by this plugin. */
     const NS = 'better-uiux';
     /** Kept in step with package.json: names the running build in the console. */
-    const CLIENT_VERSION = '0.1.0';
+    const CLIENT_VERSION = '0.1.1';
     /** Slot key of the Settings nav row this plugin fills. */
     const SECTION_SLOT = 'settings.section';
     /** id of the injected `<style>` element; also the head-order guard selector. */
@@ -2008,7 +2008,8 @@ window.__ModuleLoader__.load({
 
     // Kept in step with package.json: it names the running build in the console,
     // which is the fastest way to tell whether a page picked up a new install.
-    const CLIENT_VERSION = '0.3.5+uiux1';
+    // (The ported module's own 0.3.5 lineage is recorded in docs/INTERNALS.md.)
+    const CLIENT_VERSION = '0.1.1';
     console.log(`[dsh-better-uiux] client factory loaded (v${CLIENT_VERSION})`);
 
     // The web shell's static module registry always exposes `react` and
@@ -2483,18 +2484,6 @@ window.__ModuleLoader__.load({
           flex: none;
         }
 
-        /* Native background-job list rows become a real affordance once the
-           plugin can open their output. Pure structural CSS on purpose: React
-           re-writes these rows' className on every duration tick, so a class
-           added from here would not survive a second. */
-        li[class*="_row"]:has([class*="_duration"]) {
-          cursor: pointer;
-        }
-
-        li[class*="_row"]:has([class*="_duration"]):hover {
-          background: var(--dsw-alias-fill-l2) !important;
-        }
-
         /* Output modal (rendered by the DSH Modal primitive) */
         .dsh-live-modal {
           width: min(860px, calc(100vw - 64px)) !important;
@@ -2512,12 +2501,12 @@ window.__ModuleLoader__.load({
           overflow: hidden;
         }
 
-        /* Meta row: the command takes the free width and ellipsizes; the status
-           pill is pinned right, so a long command can neither push it around nor
-           be clipped against it. */
+        /* Meta row: the command takes the free width as a multi-line block, and
+           the status dot and duration stay pinned to its FIRST line, so a long
+           command can neither push them around nor be clipped against them. */
         .dsh-live-modal-meta {
           display: flex;
-          align-items: center;
+          align-items: flex-start;
           gap: 10px;
           min-width: 0;
           color: var(--dsw-alias-label-tertiary);
@@ -2542,6 +2531,9 @@ window.__ModuleLoader__.load({
 
         .dsh-live-modal-dot {
           flex: none;
+          /* Centres the 10px dot on the command block's FIRST 18px line box
+             instead of on the block: a 3-line command must not float it. */
+          margin-top: 4px;
         }
 
         .dsh-live-modal-duration {
@@ -2552,19 +2544,35 @@ window.__ModuleLoader__.load({
           font-variant-numeric: tabular-nums;
         }
 
+        /* The command is a block, not a single ellipsized line: a multi-line
+           command keeps its own line breaks (pre-wrap), and past three lines
+           it scrolls inside the block — the same "banner scrolls, the card does
+           not" rule as DSH's own TerminalBlock command banner, with a cap sized
+           to the local 18px line box rather than the native 150px one.
+           NOTE: never put a backtick in this stylesheet - the whole block is a
+           template literal. */
         .dsh-live-modal-command {
           flex: 1 1 auto;
           min-width: 0;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
+          max-height: 54px; /* 3 lines x 18px */
+          overflow-x: hidden;
+          overflow-y: auto;
+          white-space: pre-wrap;
+          overflow-wrap: anywhere;
           /* DSH's code family. NOT --dsw-font-markdown-code-block: that token is
              the shorthand "11px/19px var(--ds-font-family-code)", so using it as
              a family makes the declaration invalid and the text falls back to the
              UI sans font. */
           font-family: var(--ds-font-family-code, ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace);
           font-size: 12px;
+          line-height: 18px;
           color: var(--dsw-alias-label-secondary);
+        }
+
+        .dsh-live-modal-command::-webkit-scrollbar-thumb {
+          border: 2px solid transparent;
+          background-clip: padding-box;
+          border-radius: var(--dsw-radius-sm);
         }
 
         .dsh-live-modal-output {
@@ -2596,12 +2604,6 @@ window.__ModuleLoader__.load({
           justify-content: flex-end;
           gap: 8px;
           width: 100%;
-        }
-
-        .dsh-live-modal-hint {
-          margin-right: auto;
-          color: var(--dsw-alias-label-tertiary);
-          font-size: 12px;
         }
 
         .dsh-live-modal-action {
@@ -4346,9 +4348,6 @@ window.__ModuleLoader__.load({
           }
         });
 
-        // Native background-job list rows become clickable affordances
-        tagJobListRows();
-
         stopPollingIfEmpty();
       } finally {
         Promise.resolve().then(() => {
@@ -4361,12 +4360,10 @@ window.__ModuleLoader__.load({
     // =====================================================================
     // Output modal
     //
-    // One shared instance behind every job-centric entry point:
-    //   * the `Output` button on a job_output (wait) card,
-    //   * a row of DSH's native background-job list.
-    // Output is read from the host by job id, so the modal keeps working when
-    // the card that spawned the job is no longer in the transcript — the exact
-    // case where the old scroll-to-card action answered "Job not found".
+    // One shared instance behind the `Output` button on a job_output (wait)
+    // card. Output is read from the host by job id, so the modal keeps working
+    // when the card that spawned the job is no longer in the transcript — the
+    // exact case where the old scroll-to-card action answered "Job not found".
     // =====================================================================
     let sessionsService = null;
     const outputModalState = { target: null };
@@ -4412,65 +4409,16 @@ window.__ModuleLoader__.load({
       stopPollingIfEmpty();
     }
 
-    /** Close the modal and take the user to the card running this job. */
-    async function focusJobCard(jobId) {
-      if (!jobId) return false;
-      let targetCard = null;
-      try {
-        targetCard = await findOriginalJobCard(jobId, null);
-      } catch (e) {
-        targetCard = null;
-      }
-      if (!targetCard) return false;
-
-      openCard(targetCard);
-      scrollToCard(targetCard);
-      highlightCard(targetCard);
-      return true;
-    }
-
-    // The transcript is a paged window: DSH renders only the loaded history and
-    // pulls older entries back on demand ("Load earlier"), so a block from far
-    // back is genuinely absent from the DOM. `Session.loadOlder()` is the same
-    // paging call that button makes, and `ctx.sessions.binding(id).session` is
-    // how a plugin reaches it. There is no public "scroll to block" API.
-    const VIEW_BLOCK_MAX_PAGES = 6;
-    let viewBlockToken = 0;
-
-    /** The Session object behind the session on screen, for history paging. */
-    function currentSessionHandle() {
-      try {
-        const sessionId = currentSessionId();
-        if (!sessionId) return null;
-        const session = sessionsService?.binding?.(sessionId)?.session;
-        return session && typeof session.loadOlder === 'function' ? session : null;
-      } catch (e) {
-        // `binding` may mint a scope for an unlisted id; only the on-screen
-        // session is ever asked for, and a missing store must not break the UI.
-        return null;
-      }
-    }
-
-    function transcriptRowCount() {
-      try {
-        return document.querySelectorAll('[data-chat-anchor-key]').length;
-      } catch (e) {
-        return 0;
-      }
-    }
-
-    const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-    /** Wire statuses that mean the job still has work in flight. */
+    /** Stop the job itself (the background-job semantics, not the wait-only one). */
     function isLiveJobStatus(status) {
       return status === 'running' || status === 'stopping';
     }
 
     /**
      * Status marker semantics copied from DSH's own job list (`dotState` in
-     * @deepseek-ai/dsh-client-ui-jobs), so the modal and the list that opens it
-     * speak one visual language: `stopping` and `killed` share the attention
-     * color because both mean the work ended on request, not on its own.
+     * @deepseek-ai/dsh-client-ui-jobs), so the modal and that list speak one
+     * visual language: `stopping` and `killed` share the attention color because
+     * both mean the work ended on request, not on its own.
      */
     function jobDotState(status) {
       switch (status) {
@@ -4506,48 +4454,6 @@ window.__ModuleLoader__.load({
       return `${seconds}s`;
     }
 
-    /**
-     * Take the user to the block that runs this job.
-     *
-     * Tier 1 — the card is already rendered: scroll to it and highlight it.
-     * Tier 2 — the card is outside the loaded window: page older history in
-     *   through the session itself, bounded, and retry after each page.
-     * Tier 3 — give up WITHOUT hiding the output: the caller keeps the modal open
-     *   and points at the chat's own "Load earlier" control.
-     *
-     * @param jobId - job whose block to reveal.
-     * @param runToken - generation of the request; a stale token stops the paging.
-     * @returns 'found' | 'not-found' | 'unavailable' | 'cancelled'.
-     */
-    async function viewJobBlock(jobId, runToken) {
-      if (!jobId) return 'unavailable';
-      if (await focusJobCard(jobId)) return 'found';
-
-      const session = currentSessionHandle();
-      if (!session) return 'not-found';
-
-      for (let page = 0; page < VIEW_BLOCK_MAX_PAGES; page += 1) {
-        if (runToken !== viewBlockToken) return 'cancelled';
-
-        const rowsBefore = transcriptRowCount();
-        try {
-          await session.loadOlder();
-        } catch (e) {
-          return 'not-found';
-        }
-        if (runToken !== viewBlockToken) return 'cancelled';
-
-        // Let the loaded page commit and render before looking again.
-        await wait(160);
-        if (runToken !== viewBlockToken) return 'cancelled';
-
-        if (await focusJobCard(jobId)) return 'found';
-        // A page that added no rows means there is no older history left.
-        if (transcriptRowCount() === rowsBefore) return 'not-found';
-      }
-      return 'not-found';
-    }
-
     /** Stop the job itself (the background-job semantics, not the wait-only one). */
     async function stopJobFromModal(jobId) {
       if (!jobId) return false;
@@ -4569,8 +4475,7 @@ window.__ModuleLoader__.load({
      * The card's own DOM is the FIRST source and the least reliable: it depends on
      * the shell's `ioText` markup being parseable and on the payload carrying a job
      * id. When that fails the button used to do nothing at all — no modal, no
-     * message — while the header list kept working, because that path resolves from
-     * the session job store instead. So the fallbacks here use the same store.
+     * message. So the fallbacks here resolve from the session job store instead.
      *
      * @param {Element} card - the tool-call card.
      * @param {{jobId?: string|null, callId?: string|null}|null} waitInfo - already-parsed card info.
@@ -4581,8 +4486,8 @@ window.__ModuleLoader__.load({
       const fromCard = waitInfo?.jobId || card?.dataset?.jobId || null;
       if (fromCard) return { jobId: String(fromCard), source: 'card' };
 
-      // 2. Command text off the card matched against the job store. This is the
-      //    path the header uses, so it works wherever the header works.
+      // 2. Command text off the card matched against the job store — the same
+      //    store DSH's own header list renders, so it works wherever that works.
       let jobs = currentSessionJobs();
       if (!jobs) jobs = await fetchSessionJobs();
       if (Array.isArray(jobs) && jobs.length > 0) {
@@ -4613,15 +4518,12 @@ window.__ModuleLoader__.load({
       // A target with no id is still openable when it carries an `error`, so the
       // dialog can say what went wrong instead of the button silently doing nothing.
       if (!target || (!target.jobId && !target.callId && !target.error)) return false;
-      viewBlockToken += 1;
       outputModalState.target = { ...target };
       emitOutputModal();
       return true;
     }
 
     function closeOutputModal() {
-      // Stops any in-flight "View block" history paging.
-      viewBlockToken += 1;
       if (!outputModalState.target) return;
       outputModalState.target = null;
       emitOutputModal();
@@ -4651,7 +4553,7 @@ window.__ModuleLoader__.load({
       return getActiveSessionId();
     }
 
-    /** Registry fallback for the row mapping when the session store is absent. */
+    /** Registry fallback for job lookup when the session store is absent. */
     async function fetchSessionJobs() {
       try {
         const sessionId = currentSessionId();
@@ -4675,126 +4577,6 @@ window.__ModuleLoader__.load({
       } catch (e) {
         return null;
       }
-    }
-
-    // --- Native background-job list --------------------------------------
-    /**
-     * Same ordering as the native list: live rows first in start order, then
-     * settled rows newest-first. Row position is therefore an exact index into
-     * this array, which is what makes a row resolvable without a job id in the DOM.
-     */
-    function orderedJobsLikeNative(jobs) {
-      const isLive = (job) => job?.status === 'running' || job?.status === 'stopping';
-      return [...(jobs || [])].sort((left, right) => {
-        const liveLeft = isLive(left);
-        if (liveLeft !== isLive(right)) return liveLeft ? -1 : 1;
-        if (liveLeft) return (left.startedAt || 0) - (right.startedAt || 0);
-        const finished = ((right.finishedAt ?? right.startedAt) || 0) - ((left.finishedAt ?? left.startedAt) || 0);
-        return finished !== 0 ? finished : (left.startedAt || 0) - (right.startedAt || 0);
-      });
-    }
-
-    function sameJobMeta(job, meta) {
-      if (!job || !meta) return false;
-      if (job.label !== meta.label) return false;
-      return !meta.kind || job.kind === meta.kind;
-    }
-
-    /**
-     * Resolve a list row to a job id: by position first (exact), verified by the
-     * row's own kind+label, then by a unique kind+label match. Pure on purpose —
-     * it is the testable half of the row interception.
-     */
-    function resolveJobIdForRow(rowsMeta, rowIndex, jobs) {
-      const ordered = orderedJobsLikeNative(jobs);
-      const meta = rowsMeta?.[rowIndex] || null;
-      const candidate = ordered[rowIndex] || null;
-
-      if (candidate && (!meta || sameJobMeta(candidate, meta))) return candidate.id;
-      if (meta) {
-        const matches = ordered.filter((job) => sameJobMeta(job, meta));
-        if (matches.length === 1) return matches[0].id;
-      }
-      return null;
-    }
-
-    /** Structural test for a native list row (no ids or hooks are rendered). */
-    function isJobListRow(el) {
-      if (!el || el.tagName !== 'LI') return false;
-      if (!el.parentElement || el.parentElement.tagName !== 'UL') return false;
-      if (el.children.length < 4) return false;
-      return !!el.querySelector('[class*="_label"]') && !!el.querySelector('[class*="_duration"]');
-    }
-
-    function jobListRowMeta(row) {
-      const labelEl = row.querySelector('[class*="_label"]');
-      const kindEl = row.querySelector('[class*="_kind"]');
-      return {
-        label: labelEl?.getAttribute('title') || labelEl?.textContent?.trim() || '',
-        kind: kindEl?.textContent?.trim() || ''
-      };
-    }
-
-    function jobListRows() {
-      const rows = [];
-      for (const row of document.querySelectorAll('li[class*="_row"]')) {
-        if (isJobListRow(row)) rows.push(row);
-      }
-      return rows;
-    }
-
-    /**
-     * Give rows a discovery hint. Only `title` is set: React owns className and
-     * re-writes it on every duration tick, so styling lives in structural CSS
-     * instead, and this stays idempotent and cheap.
-     */
-    function tagJobListRows() {
-      let rows;
-      try {
-        rows = jobListRows();
-      } catch (e) {
-        return;
-      }
-      for (const row of rows) {
-        if (!row.title) row.title = 'Open output';
-      }
-    }
-
-    async function openOutputForRow(row) {
-      const claimed = row;
-      let jobs = currentSessionJobs();
-      if (!jobs) jobs = await fetchSessionJobs();
-      if (!jobs || !claimed.isConnected || !claimed.parentElement) return;
-
-      const siblings = Array.from(claimed.parentElement.children).filter(isJobListRow);
-      const index = siblings.indexOf(claimed);
-      if (index < 0) return;
-
-      const rowsMeta = siblings.map(jobListRowMeta);
-      const jobId = resolveJobIdForRow(rowsMeta, index, jobs);
-      if (!jobId) return;
-
-      const job = jobs.find((candidate) => candidate.id === jobId) || null;
-      openOutputModal({
-        jobId,
-        kind: job?.kind || rowsMeta[index]?.kind || '',
-        command: job?.label || rowsMeta[index]?.label || '',
-        status: job?.status || '',
-        startedAt: Number.isFinite(job?.startedAt) ? job.startedAt : 0,
-        finishedAt: Number.isFinite(job?.finishedAt) ? job.finishedAt : 0
-      });
-    }
-
-    /**
-     * Claim a click on a native list row. Rows do nothing on their own today, so
-     * swallowing the click is safe; resolution then continues asynchronously.
-     */
-    function onDocumentClickCapture(event) {
-      const row = event.target?.closest?.('li');
-      if (!isJobListRow(row)) return;
-      event.preventDefault();
-      event.stopPropagation();
-      openOutputForRow(row).catch(() => {});
     }
 
     // --- Modal component --------------------------------------------------
@@ -4836,28 +4618,27 @@ window.__ModuleLoader__.load({
       const [output, setOutput] = React.useState('');
       const [status, setStatus] = React.useState('');
       const [active, setActive] = React.useState(true);
-      const [focusFailed, setFocusFailed] = React.useState(false);
-      const [locating, setLocating] = React.useState(false);
       const [copied, setCopied] = React.useState(false);
       const [stopping, setStopping] = React.useState(false);
       const [timing, setTiming] = React.useState({ startedAt: 0, finishedAt: 0 });
+      // Sampled by the one-second ticker below, so the running duration is a
+      // re-rendered value instead of whatever `Date.now()` was at open time.
+      const [now, setNow] = React.useState(() => Date.now());
       const preRef = React.useRef(null);
       const stickToBottom = React.useRef(true);
 
       React.useEffect(() => subscribeOutputModal(() => {
         setSnapshot(outputModalState.target);
-        setFocusFailed(false);
         setCopied(false);
         setStopping(false);
-        setLocating(false);
       }), []);
 
       const jobId = snapshot?.jobId || null;
       const callId = snapshot?.callId || null;
       const unresolved = snapshot?.error === 'unresolved';
       const targetKey = jobId || callId || null;
-      // A status carried in from the native list avoids a beat where Stop job
-      // looks available on a job that already finished.
+      // A target that carries a status avoids a beat where Stop job looks
+      // available on a job that already finished.
       const initialActive = snapshot?.status ? isLiveJobStatus(snapshot.status) : true;
 
       // Reset per target BEFORE paint: the first frame of a job that already
@@ -4875,11 +4656,22 @@ window.__ModuleLoader__.load({
         );
         setStatus('');
         setActive(unresolved ? false : initialActive);
+        setNow(Date.now());
         setTiming({
           startedAt: Number.isFinite(snapshot?.startedAt) ? snapshot.startedAt : 0,
           finishedAt: Number.isFinite(snapshot?.finishedAt) ? snapshot.finishedAt : 0
         });
       }, [targetKey, unresolved]);
+
+      // The elapsed time is read off the wall clock, so a running job that prints
+      // nothing would freeze the reading at the last render (the poll loop below
+      // changes no state while the output is unchanged). Re-render once a second
+      // for as long as the job runs; settlement clears `active` and stops it.
+      React.useEffect(() => {
+        if (!active || !timing.startedAt) return undefined;
+        const timer = setInterval(() => setNow(Date.now()), 1000);
+        return () => clearInterval(timer);
+      }, [active, timing.startedAt]);
 
       // Poll the host while the modal is open; the loop ends on its own once the
       // job settles, and the effect teardown cancels it on close or target swap.
@@ -4971,16 +4763,6 @@ window.__ModuleLoader__.load({
         setTimeout(() => setCopied(false), 1500);
       };
 
-      const onFocusCard = async () => {
-        if (locating) return;
-        setLocating(true);
-        setFocusFailed(false);
-        const outcome = await viewJobBlock(jobId, viewBlockToken);
-        setLocating(false);
-        if (outcome === 'found') closeOutputModal();
-        else if (outcome === 'not-found') setFocusFailed(true);
-      };
-
       const onStop = async () => {
         if (!jobId || stopping) return;
         setStopping(true);
@@ -4989,17 +4771,6 @@ window.__ModuleLoader__.load({
       };
 
       const footer = h('div', { className: 'dsh-live-modal-footer' }, [
-        focusFailed
-          ? h('span', { className: 'dsh-live-modal-hint', key: 'hint' }, 'Block not in the loaded transcript — use "Load earlier" in the chat')
-          : null,
-        h('button', {
-          key: 'focus',
-          type: 'button',
-          className: 'dsh-live-modal-action',
-          title: locating ? 'Loading older history...' : 'Scroll to the block running this job',
-          disabled: !jobId || locating,
-          onClick: onFocusCard
-        }, locating ? 'Locating...' : 'View block'),
         h('button', {
           key: 'copy',
           type: 'button',
@@ -5016,13 +4787,13 @@ window.__ModuleLoader__.load({
         }, stopping ? 'Stopping...' : 'Stop job')
       ]);
 
-      // A status carried in from the native list names the state immediately;
-      // polling then keeps it truthful for a card-sourced target too.
+      // A status carried by the target names the state immediately; polling then
+      // keeps it truthful for a card-sourced target too.
       const wireStatus = status || snapshot?.status || '';
       const statusWord = (wireStatus && jobStatusWord(wireStatus)) || (active ? 'running' : 'settled');
       const dotTone = wireStatus ? jobDotState(wireStatus) : (active ? 'ongoing' : 'done');
       const elapsedMs = timing.startedAt
-        ? Math.max(0, (timing.finishedAt || Date.now()) - timing.startedAt)
+        ? Math.max(0, (timing.finishedAt || now) - timing.startedAt)
         : 0;
       const durationText = elapsedMs > 0 ? formatJobDuration(elapsedMs) : '';
 
@@ -5214,9 +4985,8 @@ window.__ModuleLoader__.load({
 
     /**
      * Install everything this module owns: the Output modal root, the transcript
-     * observer, the jobs-status poll, and the click handler for native job rows.
-     * Installed ONCE and gated inside every callback, so toggling the switch never
-     * has to re-wire listeners.
+     * observer and the jobs-status poll. Installed ONCE and gated inside every
+     * callback, so toggling the switch never has to re-wire listeners.
      */
     function install() {
       if (modalSupported) {
@@ -5239,9 +5009,6 @@ window.__ModuleLoader__.load({
       } else {
         console.info('[dsh-better-uiux] output modal disabled (react/primitives unavailable)');
       }
-
-      // A click on a native background-job row opens that job's output.
-      document.addEventListener('click', onDocumentClickCapture, true);
 
       const observer = new MutationObserver((mutations) => {
         if (!isEnabled()) return;
@@ -5315,11 +5082,6 @@ window.__ModuleLoader__.load({
     // Pure helpers plus the modal store, exposed for `client-logic-test.mjs` and
     // `client-modal-test.mjs` (neither needs a real DOM or renderer).
     Object.assign(exports.__internals, {
-      orderedJobsLikeNative,
-      sameJobMeta,
-      resolveJobIdForRow,
-      jobListRowMeta,
-      isJobListRow,
       openOutputModal,
       closeOutputModal,
       resolveCardJobId,

@@ -12,7 +12,10 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 
 const pluginDir = join(dirname(fileURLToPath(import.meta.url)), '..');
-const dshApp = 'C:/Users/ADMIN/AppData/Local/Programs/DSH Desktop/resources/app';
+// The unpacked tree is the one that carries node_modules (react, react-dom);
+// `resources/app` is the asar bundle and resolves neither. Pointing here is what
+// makes this test run at all.
+const dshApp = 'C:/Users/ADMIN/AppData/Local/Programs/DSH Desktop/resources/app.asar.unpacked';
 const requireFromDsh = createRequire(`${dshApp}/package.json`);
 const React = requireFromDsh('react');
 const ReactDOMServer = requireFromDsh('react-dom/server');

@@ -13,7 +13,7 @@ that used to live in separate plugins — each behind its own switch:
 
 | Switch | What it does | Ported from |
 | --- | --- | --- |
-| **Live terminal output** | Streams foreground command output and background-job output into the transcript: live blocks, header dots, Copy / Stop / View Job, an output modal, and clickable native job rows. | `dsh-plugin-live-terminal` 0.3.5 |
+| **Live terminal output** | Streams foreground command output and background-job output into the transcript: live blocks, header dots, Copy / Stop / View Job, and an output modal. | `dsh-plugin-live-terminal` 0.3.5 |
 | **Custom CSS** | Injects your own CSS snippet into the Web GUI's `<head>`, live as you type. | `dsh-plugin-custom-css` 0.1.0 |
 | **Edit message** | Adds an **Edit** button to messages already sent in the transcript: rewrite one and re-run the conversation from that point. | new |
 
@@ -63,20 +63,14 @@ contains its functionality.
 
 ### The Output button resolves from the job store, not just the card
 
-The **Output** button on a `job_output` card and the **job list in the header** open
-the same modal, but they used to resolve the job along completely different paths:
+The **Output** button on a `job_output` card opens the output modal. It used to
+resolve the job only by a parse of the card's own `ioText` markup, so when that parse
+failed the button did **nothing at all** — no modal, no message.
 
-| | source of the job id |
-| --- | --- |
-| header row | the session job **store** (`sessions.list` / the jobs route) |
-| card Output button | a parse of the card's own `ioText` markup |
-
-So when that parse failed, the button did **nothing at all** — no modal, no message —
-while the header kept working perfectly. That is exactly the reported symptom.
-
-`resolveCardJobId()` now tries the card first and then falls back to the same store
-the header uses: card dataset → command text matched against the job store → the only
-live job when there is exactly one → otherwise **nothing**. It never guesses between
+`resolveCardJobId()` now tries the card first and then falls back to the session job
+store (`sessions.list` / the jobs route): card dataset → command text matched against
+the job store → the only live job when there is exactly one → otherwise **nothing**.
+It never guesses between
 two candidates, because opening the wrong job's output is worse than saying so. When
 resolution fails the dialog opens with an honest explanation instead of the button
 being silently dead, and the click logs its `source`:
@@ -84,6 +78,25 @@ being silently dead, and the click logs its `source`:
 ```
 [dsh-better-uiux] Output button clicked {"jobId":"pwsh-1","callId":"…","source":"command","opened":true}
 ```
+
+### The modal's command block and its live duration
+
+Two details of the output modal are easy to get subtly wrong.
+
+The command is a **block, not an ellipsized line**. A multi-line command keeps its
+own breaks (`white-space: pre-wrap`), and past **three 18px lines** it scrolls inside
+the block. That is DSH's own `TerminalBlock` rule — its command banner scrolls at
+150px rather than pushing the output off screen — with the cap sized to this modal's
+smaller line box. The status dot and the duration stay top-aligned with the command
+block's **first** line, so a three-line command cannot float them mid-block.
+
+The duration is read off a **sampled clock**. The modal polls the host every 300ms,
+but that poll changes no state at all while a job prints nothing new — same output,
+same status, same `startedAt` — so a `Date.now()` evaluated during render froze the
+reading at whatever it was when the modal opened, and a quiet job's timer looked
+stuck. A 1 Hz `setNow(Date.now())` ticker keeps a running job's reading moving; it
+starts only for a live job with a known `startedAt` and stops as soon as the job
+settles, where the duration comes from `finishedAt - startedAt` and never ticks.
 
 `source` is `card`, `command`, `command-prefix`, `only-live-job`, or `unresolved`.
 
@@ -509,7 +522,7 @@ client.js           GENERATED: core.js + live-terminal.js concatenated
 build.mjs           the concatenation step (see below)
 local-install.mjs   status / install / uninstall against the DSH web profile
 syntax-check.mjs    parse gate for every shipped artifact
-tests/              render, wiring contract, host smoke, config-store edge cases
+tests/              render (settings pane + output modal), wiring contract, host smoke, config-store edge cases
 ```
 
 ### Why a build step
@@ -570,6 +583,7 @@ node build.mjs                              # regenerate the bundle
 node syntax-check.mjs .                     # both artifacts parse
 node tests/stylesheet-integrity-test.mjs    # 11 checks: the CSS template is intact
 node tests/render-section.mjs               # renders the Settings pane with real React
+node tests/output-modal-test.mjs            # 14 checks: the modal's command block and live duration
 node tests/client-wiring-test.mjs           # 84 wiring/contract assertions
 node tests/edit-placement-test.mjs          # 18 checks: Edit sits between time and copy
 node tests/edit-fork-test.mjs               # 65 checks: fork, retire, order, and no-append-on-failure

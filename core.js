@@ -32,7 +32,7 @@ window.__ModuleLoader__.load({
     /** Locale dictionary namespace owned by this plugin. */
     const NS = 'better-uiux';
     /** Kept in step with package.json: names the running build in the console. */
-    const CLIENT_VERSION = '0.1.0';
+    const CLIENT_VERSION = '0.1.1';
     /** Slot key of the Settings nav row this plugin fills. */
     const SECTION_SLOT = 'settings.section';
     /** id of the injected `<style>` element; also the head-order guard selector. */
